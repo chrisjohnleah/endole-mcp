@@ -1,0 +1,20 @@
+{
+  "name": "endole-mcp",
+  "version": "1.0.0",
+  "description": "Unofficial local MCP server for the Endole API",
+  "type": "module",
+  "bin": {
+    "endole-mcp": "./src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.1.0",
+    "zod": "^4.6.5"
+  },
+  "license": "MIT"
+}
