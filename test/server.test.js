@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { requestEndole } from '../src/server.js';
+import { InMemoryTransport } from '@modelcontextprotocol/server';
+import { createServer, requestEndole } from '../src/server.js';
 
 test('passes the key only in the header and returns Endole data with credit metadata', async () => {
   let request;
@@ -48,4 +49,54 @@ test('starts over stdio, advertises all ten tools and rejects invalid company nu
   assert.equal(replies.find(reply => reply.id === 1).result.serverInfo.name, 'endole-mcp');
   assert.equal(replies.find(reply => reply.id === 2).result.tools.length, 10);
   assert.equal(replies.find(reply => reply.id === 3).result.isError, true);
+});
+
+test('routes every documented tool, passes pages and rejects page zero', { timeout: 5000 }, async () => {
+  const urls = [];
+  const server = createServer('test-key', async url => {
+    urls.push(url);
+    return { ok: true, status: 200, json: async () => ({ status: 'success', data: {} }) };
+  });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await clientTransport.start();
+  let id = 0;
+  const call = async (method, params = {}) => {
+    const currentId = ++id;
+    const reply = new Promise(resolve => {
+      clientTransport.onmessage = message => {
+        if (message.id === currentId) resolve(message);
+      };
+    });
+    await clientTransport.send({ jsonrpc: '2.0', id: currentId, method, params });
+    return reply;
+  };
+
+  try {
+    await call('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'test', version: '1' } });
+    await clientTransport.send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    const cases = [
+      ['search_companies', { query: 'Acme Ltd', page: 2 }, '/company/search?query=Acme+Ltd&page=2'],
+      ['get_company_profile', { company_number: 'sc000001' }, '/company/SC000001/profile'],
+      ['get_company_appointments', { company_number: 'sc000001', page: 2 }, '/company/SC000001/appointments?page=2'],
+      ['get_company_financials', { company_number: 'sc000001' }, '/company/SC000001/financials'],
+      ['get_company_group_structure', { company_number: 'sc000001' }, '/company/SC000001/group-structure'],
+      ['get_company_ccj', { company_number: 'sc000001', page: 2 }, '/company/SC000001/ccj?page=2'],
+      ['get_company_shareholders', { company_number: 'sc000001', page: 2 }, '/company/SC000001/shareholders?page=2'],
+      ['get_company_credit_score_limit', { company_number: 'sc000001' }, '/company/SC000001/credit-score-limit'],
+      ['get_company_vat_number', { company_number: 'sc000001' }, '/company/SC000001/vat-number'],
+      ['get_company_documents', { company_number: 'sc000001', page: 2 }, '/company/SC000001/documents?page=2']
+    ];
+    for (const [name, args] of cases) {
+      const reply = await call('tools/call', { name, arguments: args });
+      assert.equal(reply.result.isError, undefined, name);
+    }
+    assert.deepEqual(urls, cases.map(([, , path]) => `https://api.endole.co.uk${path}`));
+    const invalid = await call('tools/call', { name: 'search_companies', arguments: { query: 'Acme', page: 0 } });
+    assert.equal(invalid.result.isError, true);
+    assert.equal(urls.length, cases.length);
+  } finally {
+    await clientTransport.close();
+    await server.close();
+  }
 });

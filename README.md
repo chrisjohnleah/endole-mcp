@@ -65,7 +65,7 @@ Each tool makes one Endole API request and returns the API's JSON response, incl
 | `get_company_vat_number` | VAT registration | 5 |
 | `get_company_documents` | Filing history and document links | 1 |
 
-Search accepts a `query`. Other tools accept an eight-character `company_number`, including leading zeroes. The server does not download linked documents. Endole's API terms and subscription govern use of the data; the MIT licence covers this server's code only.
+Search accepts a `query`. Other tools accept an eight-character `company_number`, including leading zeroes. Search, appointments, documents, CCJs and shareholders also accept an optional `page` (starting at 1). Endole returns pagination metadata with those results. The server returns document links rather than downloading PDFs. Endole's API terms and subscription govern use of the data; the MIT licence covers this server's code only.
 
 ## Check locally
 
